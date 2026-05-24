@@ -1,0 +1,99 @@
+{
+  "audioBasePath": "./audio_files",
+  "source": {
+    "type": "hybrid",
+    "scanExts": [".mp3", ".wav", ".aiff", ".flac", ".ogg", ".m4a"]
+  },
+  "categories": [
+    {
+      "key": "pop",
+      "label": "流行音乐",
+      "subs": [
+        {
+          "key": "30s",
+          "label": "30秒",
+          "folderName": "30秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        },
+        {
+          "key": "60s",
+          "label": "60秒",
+          "folderName": "60秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        },
+        {
+          "key": "90s",
+          "label": "90秒",
+          "folderName": "90秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        }
+      ]
+    },
+    {
+      "key": "nostalgia",
+      "label": "怀旧音乐",
+      "subs": [
+        {
+          "key": "30s",
+          "label": "30秒",
+          "folderName": "30秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        },
+        {
+          "key": "60s",
+          "label": "60秒",
+          "folderName": "60秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        },
+        {
+          "key": "90s",
+          "label": "90秒",
+          "folderName": "90秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        }
+      ]
+    },
+    {
+      "key": "classic",
+      "label": "经典音乐",
+      "subs": [
+        {
+          "key": "30s",
+          "label": "30秒",
+          "folderName": "30秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        },
+        {
+          "key": "60s",
+          "label": "60秒",
+          "folderName": "60秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        },
+        {
+          "key": "90s",
+          "label": "90秒",
+          "folderName": "90秒",
+          "exclude": [],
+          "files": [],
+          "order": "alphabetical"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git branch:*)",
+      "Bash(find /Users/zsc/Documents/Code_s/ExtendScript/Audio/audio-platform -type f -not -path */.git/*)",
+      "Bash(cd:*)",
+      "Bash(find /Users/zsc/Documents/Code_s/ExtendScript/Audio/audio-platform -name *.schema.json -type f)",
+      "Bash(while IFS= read -r line)",
+      "Bash(do printf:*)",
+      "Bash(done)",
+      "Bash(xxd)",
+      "Bash(git -C /Users/zsc/Documents/Code_s/ExtendScript/Audio add docs/superpowers/specs/2026-05-24-audio-platform-refactor-design.md)",
+      "Bash(git -C:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

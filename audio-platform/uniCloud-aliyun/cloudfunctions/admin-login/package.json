@@ -1,0 +1,6 @@
+{
+  "name": "admin-login",
+  "dependencies": {
+    "bcryptjs": "^2.4.3"
+  }
+}

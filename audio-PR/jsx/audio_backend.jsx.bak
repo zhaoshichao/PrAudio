@@ -1,0 +1,633 @@
+/*************************************************************************
+ * Audio Plugin — ExtendScript Backend
+ * CEP panel backend for browsing, previewing, importing, and inserting
+ * audio files into Premiere Pro sequences.
+ *
+ * Communication: app.setSDKEventMessage(JSON.stringify(msg)) → panel
+ *                panel → csInterface.evalScript('$._AUDIO_PLUGIN_.func(args)')
+ **************************************************************************/
+
+// ──────────────────────────────────────────────
+// JSON polyfill for ExtendScript (ES3 engine)
+// ──────────────────────────────────────────────
+if (typeof JSON === 'undefined') {
+    JSON = {
+        parse: function (text) {
+            var sanitized = text.replace(/[\u0000-\u001F]/g, '');
+            return eval('(' + sanitized + ')');
+        },
+        stringify: (function () {
+            function quote(str) {
+                return '"' + str.replace(/["\\\n\r\t]/g, function (c) {
+                    switch (c) {
+                        case '"': return '\\"';
+                        case '\\': return '\\\\';
+                        case '\n': return '\\n';
+                        case '\r': return '\\r';
+                        case '\t': return '\\t';
+                    }
+                    return c;
+                }) + '"';
+            }
+            function str(val) {
+                var t = typeof val;
+                if (t === 'string') return quote(val);
+                if (t === 'number') return isFinite(val) ? String(val) : 'null';
+                if (t === 'boolean') return String(val);
+                if (val === null || val === undefined) return 'null';
+                if (val instanceof Array) {
+                    var a = [];
+                    for (var i = 0; i < val.length; i++) {
+                        a.push(str(val[i]));
+                    }
+                    return '[' + a.join(',') + ']';
+                }
+                if (t === 'object') {
+                    var props = [];
+                    for (var k in val) {
+                        if (val.hasOwnProperty && val.hasOwnProperty(k)) {
+                            props.push(quote(k) + ':' + str(val[k]));
+                        } else if (!val.hasOwnProperty) {
+                            props.push(quote(k) + ':' + str(val[k]));
+                        }
+                    }
+                    return '{' + props.join(',') + '}';
+                }
+                return 'null';
+            }
+            return str;
+        })()
+    };
+}
+
+// ──────────────────────────────────────────────
+// ES5 polyfills for ExtendScript
+// ──────────────────────────────────────────────
+if (!Object.keys) {
+    Object.keys = function (obj) {
+        var keys = [];
+        for (var k in obj) {
+            if (obj.hasOwnProperty) {
+                if (obj.hasOwnProperty(k)) keys.push(k);
+            } else {
+                keys.push(k);
+            }
+        }
+        return keys;
+    };
+}
+if (!Array.prototype.filter) {
+    Array.prototype.filter = function (fn, ctx) {
+        var result = [];
+        for (var i = 0; i < this.length; i++) {
+            if (i in this) {
+                if (fn.call(ctx, this[i], i, this)) result.push(this[i]);
+            }
+        }
+        return result;
+    };
+}
+if (!Array.prototype.indexOf) {
+    Array.prototype.indexOf = function (item, from) {
+        var start = from || 0;
+        for (var i = start; i < this.length; i++) {
+            if (this[i] === item) return i;
+        }
+        return -1;
+    };
+}
+
+// ──────────────────────────────────────────────
+// Load PProPanel utilities (graceful fallback)
+// ──────────────────────────────────────────────
+try {
+    $.evalFile('/Users/zsc/Documents/Code_s/ExtendScript/4 常用代码_Premiere.jsx');
+} catch (e) {
+    // PProPanel not available; continue with built-in fallbacks
+}
+
+$._AUDIO_PLUGIN_ = {
+    // ──────────────────────────────────────────────
+    // State
+    // ──────────────────────────────────────────────
+    config: null,
+    importedFileMap: {},   // filePath (absolute) → projectItem reference
+    pluginRoot: null,      // Audio/ plugin root directory
+
+    // ──────────────────────────────────────────────
+    // Initialization
+    // ──────────────────────────────────────────────
+    init: function () {
+        try {
+            this.pluginRoot = this._getPluginRoot();
+            this.loadConfig();
+            this.scanProjectForImportedAudio();
+            this._sendToPanel('ready', { status: 'initialized', pluginRoot: this.pluginRoot });
+        } catch (e) {
+            this._sendToPanel('error', { message: 'Init failed: ' + e.toString() });
+        }
+    },
+
+    // ──────────────────────────────────────────────
+    // Config
+    // ──────────────────────────────────────────────
+    loadConfig: function () {
+        var configPath = this._getPluginRoot() + '/config/categories.json';
+        var configFile = new File(configPath);
+        if (!configFile.exists) {
+            this._sendToPanel('error', { message: 'Config file not found: ' + configPath });
+            return;
+        }
+        configFile.open('r');
+        var content = configFile.read();
+        configFile.close();
+        try {
+            this.config = JSON.parse(content);
+            this._sendToPanel('configLoaded', this.config);
+        } catch (e) {
+            this._sendToPanel('error', { message: 'Failed to parse config: ' + e.toString() });
+        }
+    },
+
+    // ──────────────────────────────────────────────
+    // Audio File Discovery — Source Adapter
+    // (entry point for hybrid/folder/network sources)
+    // ──────────────────────────────────────────────
+    getAudioFilesForCategory: function (categoryKey, subKey) {
+        var subConfig = this._findSubConfig(categoryKey, subKey);
+        if (!subConfig) {
+            this._sendToPanel('error', {
+                message: 'Category not found: ' + categoryKey + '/' + subKey
+            });
+            return;
+        }
+
+        // Future: check subConfig.source type and dispatch
+        // if (subConfig.source === 'network') return this._fetchFromNetwork(subConfig);
+        // Default: hybrid (folder scan + JSON merge)
+        this._discoverFromHybrid(categoryKey, subKey, subConfig);
+    },
+
+    // ──────────────────────────────────────────────
+    // Hybrid Discovery: folder scan + JSON merge
+    // ──────────────────────────────────────────────
+    _discoverFromHybrid: function (categoryKey, subKey, subConfig) {
+        var audioBase = this._getAudioBasePath();
+        var categoryLabel = this._findCategoryLabel(categoryKey);
+        var scanPath = audioBase + '/' + categoryLabel + '/' + subConfig.folderName;
+
+        // 1. Folder scan (primary data source)
+        var folderFiles = this._scanFolder(scanPath);
+
+        // 2. Apply exclude patterns
+        if (subConfig.exclude && subConfig.exclude.length > 0) {
+            folderFiles = this._applyExcludes(folderFiles, subConfig.exclude);
+        }
+
+        // 3. Merge JSON files[] additions and overrides
+        var mergedFiles = this._mergeJsonFiles(folderFiles, subConfig.files || []);
+
+        // 4. Apply ordering
+        mergedFiles = this._applyOrder(mergedFiles, subConfig.order || 'alphabetical');
+
+        // 5. Cross-check imported state
+        mergedFiles = this._attachImportState(mergedFiles);
+
+        // 6. Send to panel
+        this._sendToPanel('audioFilesLoaded', {
+            categoryKey: categoryKey,
+            subKey: subKey,
+            files: mergedFiles
+        });
+    },
+
+    // ──────────────────────────────────────────────
+    // Preview
+    // ──────────────────────────────────────────────
+    previewAudio: function (filePath) {
+        try {
+            var fileToOpen = new File(filePath);
+            if (!fileToOpen.exists) {
+                this._sendToPanel('error', { message: 'File not found: ' + filePath });
+                return;
+            }
+
+            // Suppress auto peak file generation (per PProPanel openInSource pattern)
+            var property = 'BE.Prefs.Audio.AutoPeakGeneration';
+            var initialValue = app.properties.getProperty(property);
+            if (initialValue === 'true') {
+                app.properties.setProperty(property, 'false', 1, true);
+            }
+
+            app.sourceMonitor.openFilePath(filePath);
+
+            if (initialValue === 'true') {
+                app.properties.setProperty(property, initialValue, 1, true);
+            }
+
+            app.sourceMonitor.play(1.0);
+            this._sendToPanel('previewStarted', { filePath: filePath });
+        } catch (e) {
+            this._sendToPanel('error', { message: 'Preview failed: ' + e.toString() });
+        }
+    },
+
+    stopPreview: function () {
+        try {
+            app.sourceMonitor.closeClip();
+            this._sendToPanel('previewStopped', {});
+        } catch (e) {
+            this._sendToPanel('error', { message: 'Stop preview failed: ' + e.toString() });
+        }
+    },
+
+    // ──────────────────────────────────────────────
+    // Import
+    // ──────────────────────────────────────────────
+    importAudio: function (filePath) {
+        try {
+            var fileToImport = new File(filePath);
+            if (!fileToImport.exists) {
+                this._sendToPanel('error', { message: 'File not found: ' + filePath });
+                return;
+            }
+
+            // Find or create target bin
+            var targetBin;
+            if (typeof $._PPP_ !== 'undefined' && $._PPP_.searchForBinWithName) {
+                targetBin = $._PPP_.searchForBinWithName('Audio Plugin Imports');
+            } else {
+                targetBin = this._searchBinByName(app.project.rootItem, 'Audio Plugin Imports');
+            }
+            if (!targetBin) {
+                targetBin = app.project.rootItem.createBin('Audio Plugin Imports');
+            }
+
+            // Import the file
+            var suppressWarnings = true;
+            var importAsStills = false;
+            app.project.importFiles([filePath], suppressWarnings, targetBin, importAsStills);
+
+            // Find the newly imported project item in the bin
+            var importedItem = null;
+            for (var i = 0; i < targetBin.children.numItems; i++) {
+                var child = targetBin.children[i];
+                // Match by media path
+                try {
+                    if (child.getMediaPath && child.getMediaPath() === filePath) {
+                        importedItem = child;
+                        break;
+                    }
+                } catch (e2) {
+                    // Some items don't have getMediaPath
+                }
+            }
+            // Fallback: use last item in bin
+            if (!importedItem && targetBin.children.numItems > 0) {
+                importedItem = targetBin.children[targetBin.children.numItems - 1];
+            }
+
+            if (importedItem) {
+                this.importedFileMap[filePath] = importedItem;
+            }
+
+            this._sendToPanel('audioImported', {
+                filePath: filePath,
+                projectItemName: importedItem ? importedItem.name : '',
+                success: true
+            });
+        } catch (e) {
+            this._sendToPanel('error', { message: 'Import failed: ' + e.toString() });
+        }
+    },
+
+    // ──────────────────────────────────────────────
+    // Insert at Playhead
+    // ──────────────────────────────────────────────
+    insertAudioAtPlayhead: function (filePath) {
+        try {
+            var seq = app.project.activeSequence;
+            if (!seq) {
+                this._sendToPanel('error', { message: 'No active sequence.' });
+                return;
+            }
+
+            var projectItem = this.importedFileMap[filePath];
+            if (!projectItem) {
+                // Re-scan to recover state
+                this.scanProjectForImportedAudio();
+                projectItem = this.importedFileMap[filePath];
+            }
+            if (!projectItem) {
+                this._sendToPanel('error', {
+                    message: 'Audio not imported. Please import first.',
+                    filePath: filePath
+                });
+                return;
+            }
+
+            // Verify item is still valid in project
+            try {
+                var checkName = projectItem.name;
+            } catch (e) {
+                // Reference is stale, re-scan
+                this.scanProjectForImportedAudio();
+                projectItem = this.importedFileMap[filePath];
+                if (!projectItem) {
+                    this._sendToPanel('error', {
+                        message: 'Project item no longer exists. Please re-import.',
+                        filePath: filePath
+                    });
+                    return;
+                }
+            }
+
+            // Get playhead position
+            var playhead = seq.getPlayerPosition();
+
+            // Get first audio track
+            if (seq.audioTracks.numTracks === 0) {
+                this._sendToPanel('error', { message: 'No audio track in sequence.' });
+                return;
+            }
+            var audioTrack = seq.audioTracks[0];
+
+            // Insert clip at playhead position
+            // .seconds property is a String representation of seconds (e.g. "1.5")
+            audioTrack.insertClip(projectItem, playhead.seconds);
+
+            this._sendToPanel('audioInserted', {
+                filePath: filePath,
+                itemName: projectItem.name,
+                time: String(playhead.seconds),
+                trackIndex: 0
+            });
+        } catch (e) {
+            this._sendToPanel('error', { message: 'Insert failed: ' + e.toString() });
+        }
+    },
+
+    // ──────────────────────────────────────────────
+    // Import State Scanner
+    // ──────────────────────────────────────────────
+    scanProjectForImportedAudio: function () {
+        this.importedFileMap = {};
+        if (!app.project) return;
+
+        var self = this;
+        var scanBin = function (bin) {
+            if (!bin || !bin.children) return;
+            for (var i = 0; i < bin.children.numItems; i++) {
+                var child = bin.children[i];
+                if (!child) continue;
+                if (child.type === 2) {
+                    // type 2 = Bin, recurse
+                    scanBin(child);
+                } else {
+                    // Try to get media path
+                    try {
+                        if (child.getMediaPath) {
+                            var mediaPath = child.getMediaPath();
+                            if (mediaPath && !self.importedFileMap[mediaPath]) {
+                                self.importedFileMap[mediaPath] = child;
+                            }
+                        }
+                    } catch (e) {
+                        // Some items don't support getMediaPath
+                    }
+                }
+            }
+        };
+
+        scanBin(app.project.rootItem);
+        this._sendToPanel('importStateUpdated', {
+            importedCount: Object.keys(this.importedFileMap).length
+        });
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Folder Scanner
+    // ──────────────────────────────────────────────
+    _scanFolder: function (folderPath) {
+        var folder = new Folder(folderPath);
+        if (!folder.exists) return [];
+
+        var results = [];
+        var scanExts = (this.config && this.config.source && this.config.source.scanExts) ||
+            ['.mp3', '.wav', '.aiff', '.flac', '.ogg', '.m4a'];
+        var files = folder.getFiles();
+
+        for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+            if (!(file instanceof File)) continue;
+
+            var name = file.name;
+            var extMatch = name.match(/\.[^.]+$/);
+            var ext = extMatch ? extMatch[0].toLowerCase() : '';
+
+            // Check extension match
+            var extOk = false;
+            for (var j = 0; j < scanExts.length; j++) {
+                if (ext === scanExts[j]) {
+                    extOk = true;
+                    break;
+                }
+            }
+            if (!extOk) continue;
+
+            results.push({
+                fileName: name,
+                filePath: String(file.fsName),
+                displayName: name.substring(0, name.length - ext.length),
+                durationLabel: '',
+                isImported: false
+            });
+        }
+        return results;
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Apply Exclude Patterns
+    // ──────────────────────────────────────────────
+    _applyExcludes: function (fileList, excludePatterns) {
+        var self = this;
+        return fileList.filter(function (f) {
+            for (var i = 0; i < excludePatterns.length; i++) {
+                if (self._matchGlob(f.fileName, excludePatterns[i])) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Glob Pattern Matching (simple wildcards)
+    // ──────────────────────────────────────────────
+    _matchGlob: function (str, pattern) {
+        // Escape regex chars, then convert * → .* and ? → .
+        var regexStr = pattern
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*/g, '.*')
+            .replace(/\?/g, '.');
+        var regex = new RegExp('^' + regexStr + '$', 'i');
+        return regex.test(str);
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Merge JSON files[] entries
+    // ──────────────────────────────────────────────
+    _mergeJsonFiles: function (folderFiles, jsonFiles) {
+        var merged = folderFiles.slice(); // shallow copy
+
+        for (var i = 0; i < jsonFiles.length; i++) {
+            var jf = jsonFiles[i];
+            var found = false;
+
+            // Search for matching file by fileName
+            for (var j = 0; j < merged.length; j++) {
+                if (merged[j].fileName === jf.fileName) {
+                    found = true;
+                    // Apply overrides
+                    if (jf.displayName) merged[j].displayName = jf.displayName;
+                    if (jf.durationLabel) merged[j].durationLabel = jf.durationLabel;
+                    if (jf.filePath) merged[j].filePath = jf.filePath;
+                    break;
+                }
+            }
+
+            // Add as new entry if not found (external reference)
+            if (!found) {
+                merged.push({
+                    fileName: jf.fileName,
+                    filePath: jf.filePath || '',
+                    displayName: jf.displayName || jf.fileName.replace(/\.[^.]+$/, ''),
+                    durationLabel: jf.durationLabel || '',
+                    isImported: false
+                });
+            }
+        }
+
+        return merged;
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Apply Ordering
+    // ──────────────────────────────────────────────
+    _applyOrder: function (fileList, order) {
+        switch (order) {
+            case 'alphabetical':
+                fileList.sort(function (a, b) {
+                    return a.fileName.localeCompare(b.fileName);
+                });
+                break;
+            // case 'custom': future — sort by JSON-defined order
+            // default: keep folder scan order
+        }
+        return fileList;
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Attach Import State to File List
+    // ──────────────────────────────────────────────
+    _attachImportState: function (fileList) {
+        for (var i = 0; i < fileList.length; i++) {
+            var key = fileList[i].filePath;
+            if (this.importedFileMap[key]) {
+                fileList[i].isImported = true;
+                fileList[i].projectItemName = this.importedFileMap[key].name || '';
+            } else {
+                fileList[i].isImported = false;
+                fileList[i].projectItemName = '';
+            }
+        }
+        return fileList;
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Config Helpers
+    // ──────────────────────────────────────────────
+    _findSubConfig: function (categoryKey, subKey) {
+        if (!this.config || !this.config.categories) return null;
+        for (var i = 0; i < this.config.categories.length; i++) {
+            var cat = this.config.categories[i];
+            if (cat.key === categoryKey) {
+                for (var j = 0; j < cat.subs.length; j++) {
+                    if (cat.subs[j].key === subKey) {
+                        return cat.subs[j];
+                    }
+                }
+            }
+        }
+        return null;
+    },
+
+    _findCategoryLabel: function (categoryKey) {
+        if (!this.config || !this.config.categories) return categoryKey;
+        for (var i = 0; i < this.config.categories.length; i++) {
+            if (this.config.categories[i].key === categoryKey) {
+                return this.config.categories[i].label;
+            }
+        }
+        return categoryKey;
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Search Bin by Name (fallback if PProPanel not loaded)
+    // ──────────────────────────────────────────────
+    _searchBinByName: function (parentBin, nameToFind) {
+        if (!parentBin || !parentBin.children) return null;
+        for (var i = 0; i < parentBin.children.numItems; i++) {
+            var child = parentBin.children[i];
+            if (!child) continue;
+            if (child.type === 2) {
+                // type 2 = Bin
+                if (child.name === nameToFind) return child;
+                var found = this._searchBinByName(child, nameToFind);
+                if (found) return found;
+            }
+        }
+        return null;
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Path Helpers
+    // ──────────────────────────────────────────────
+    _getPluginRoot: function () {
+        // $.fileName gives the path of the currently executing script
+        try {
+            var scriptFile = new File($.fileName);
+            // Go up: jsx/ → Audio/
+            return String(scriptFile.parent.parent.fsName);
+        } catch (e) {
+            // Fallback: use a known absolute path
+            return '/Users/zsc/Documents/Code_s/ExtendScript/Audio';
+        }
+    },
+
+    _getAudioBasePath: function () {
+        if (this.config && this.config.audioBasePath) {
+            var base = this.config.audioBasePath;
+            // Resolve relative path
+            if (base.indexOf('./') === 0) {
+                return this.pluginRoot + '/' + base.substring(2);
+            }
+            return base;
+        }
+        return this.pluginRoot + '/audio_files';
+    },
+
+    // ──────────────────────────────────────────────
+    // Private: Send Message to Panel
+    // ──────────────────────────────────────────────
+    _sendToPanel: function (action, data) {
+        var msg = JSON.stringify({
+            action: action,
+            data: data || {}
+        });
+        app.setSDKEventMessage(msg, 'info');
+    }
+};
+
+// Auto-init when loaded
+$._AUDIO_PLUGIN_.init();

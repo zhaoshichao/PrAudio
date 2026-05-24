@@ -1,0 +1,67 @@
+{
+  "bsonType": "object",
+  "required": ["name", "categoryId"],
+  "permission": {
+    "read": true,
+    "create": "'admin_token' in auth.getToken()",
+    "update": "'admin_token' in auth.getToken()",
+    "delete": "'admin_token' in auth.getToken()"
+  },
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "name": {
+      "bsonType": "string",
+      "description": "音频名称",
+      "label": "名称",
+      "title": "名称"
+    },
+    "description": {
+      "bsonType": "string",
+      "description": "音频描述",
+      "label": "描述"
+    },
+    "categoryId": {
+      "bsonType": "string",
+      "description": "所属二级分类ID",
+      "label": "分类ID"
+    },
+    "tagIds": {
+      "bsonType": "array",
+      "description": "标签ID数组",
+      "label": "标签",
+      "items": { "bsonType": "string" }
+    },
+    "cover": {
+      "bsonType": "string",
+      "description": "封面图 cloud fileID",
+      "label": "封面"
+    },
+    "sort": {
+      "bsonType": "int",
+      "description": "排序值",
+      "label": "排序",
+      "defaultValue": 0
+    },
+    "status": {
+      "bsonType": "int",
+      "description": "状态：1=上架，0=下架",
+      "label": "状态",
+      "defaultValue": 1,
+      "enum": [
+        {"value": 1, "text": "上架"},
+        {"value": 0, "text": "下架"}
+      ]
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "description": "创建时间",
+      "label": "创建时间",
+      "forceDefaultValue": { "$env": "now" }
+    },
+    "updatedAt": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "label": "更新时间"
+    }
+  }
+}

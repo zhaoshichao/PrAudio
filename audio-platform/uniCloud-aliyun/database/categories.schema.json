@@ -1,0 +1,63 @@
+{
+  "bsonType": "object",
+  "required": ["name", "level"],
+  "permission": {
+    "read": true,
+    "create": "'admin_token' in auth.getToken()",
+    "update": "'admin_token' in auth.getToken()",
+    "delete": "'admin_token' in auth.getToken()"
+  },
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "name": {
+      "bsonType": "string",
+      "description": "分类名称",
+      "label": "名称"
+    },
+    "level": {
+      "bsonType": "int",
+      "description": "层级：1=一级分类，2=二级分类",
+      "label": "层级",
+      "enum": [
+        {"value": 1, "text": "一级分类"},
+        {"value": 2, "text": "二级分类"}
+      ]
+    },
+    "parentId": {
+      "bsonType": "string",
+      "description": "上级分类ID（一级分类为null）",
+      "label": "上级分类"
+    },
+    "parentName": {
+      "bsonType": "string",
+      "description": "上级分类名称（冗余）",
+      "label": "上级分类名"
+    },
+    "sort": {
+      "bsonType": "int",
+      "description": "排序值",
+      "label": "排序",
+      "defaultValue": 0
+    },
+    "icon": {
+      "bsonType": "string",
+      "description": "图标emoji或图片URL",
+      "label": "图标"
+    },
+    "status": {
+      "bsonType": "int",
+      "description": "状态：1=启用，0=禁用",
+      "label": "状态",
+      "defaultValue": 1
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "label": "创建时间",
+      "forceDefaultValue": { "$env": "now" }
+    },
+    "updatedAt": {
+      "bsonType": "timestamp",
+      "label": "更新时间"
+    }
+  }
+}

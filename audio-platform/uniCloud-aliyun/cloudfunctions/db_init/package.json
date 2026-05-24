@@ -1,0 +1,6 @@
+{
+  "name": "db_init",
+  "dependencies": {
+    "bcryptjs": "^2.4.3"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "bsonType": "object",
+  "required": ["audioId", "versionId", "fileUrl"],
+  "permission": {
+    "read": true,
+    "create": "'admin_token' in auth.getToken()",
+    "update": "'admin_token' in auth.getToken()",
+    "delete": "'admin_token' in auth.getToken()"
+  },
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "audioId": {
+      "bsonType": "string",
+      "description": "音频ID",
+      "label": "音频",
+      "foreignKey": "audio_files._id"
+    },
+    "versionId": {
+      "bsonType": "string",
+      "description": "版本ID",
+      "label": "版本",
+      "foreignKey": "versions._id"
+    },
+    "versionName": {
+      "bsonType": "string",
+      "description": "版本名称冗余（如 30秒）",
+      "label": "版本名称"
+    },
+    "fileUrl": {
+      "bsonType": "string",
+      "description": "音频文件 cloud fileID（必填）",
+      "label": "文件"
+    },
+    "fileName": {
+      "bsonType": "string",
+      "description": "原始文件名",
+      "label": "文件名"
+    },
+    "fileSize": {
+      "bsonType": "int",
+      "description": "文件大小（字节）",
+      "label": "文件大小"
+    },
+    "duration": {
+      "bsonType": "int",
+      "description": "实际时长（秒）",
+      "label": "时长"
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "label": "创建时间",
+      "forceDefaultValue": { "$env": "now" }
+    }
+  }
+}

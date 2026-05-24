@@ -1,0 +1,47 @@
+{
+  "bsonType": "object",
+  "required": ["name"],
+  "permission": {
+    "read": true,
+    "create": "'admin_token' in auth.getToken()",
+    "update": "'admin_token' in auth.getToken()",
+    "delete": "'admin_token' in auth.getToken()"
+  },
+  "properties": {
+    "_id": {
+      "bsonType": "string"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "版本名称，如「30秒」「60秒」「90秒」",
+      "label": "名称"
+    },
+    "duration": {
+      "bsonType": "int",
+      "description": "时长（秒），如 30、60、90",
+      "label": "时长"
+    },
+    "sort": {
+      "bsonType": "int",
+      "description": "排序值",
+      "label": "排序",
+      "defaultValue": 0
+    },
+    "status": {
+      "bsonType": "int",
+      "label": "状态",
+      "defaultValue": 1
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "label": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "updatedAt": {
+      "bsonType": "timestamp",
+      "label": "更新时间"
+    }
+  }
+}

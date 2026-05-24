@@ -1,0 +1,67 @@
+{
+  "bsonType": "object",
+  "required": ["username", "password_hash", "role"],
+  "permission": {
+    "read": "'admin_token' in auth.getToken()",
+    "create": "'admin_token' in auth.getToken()",
+    "update": "'admin_token' in auth.getToken()",
+    "delete": "'admin_token' in auth.getToken()"
+  },
+  "properties": {
+    "_id": {
+      "bsonType": "string"
+    },
+    "username": {
+      "bsonType": "string",
+      "description": "管理员用户名",
+      "label": "用户名"
+    },
+    "password_hash": {
+      "bsonType": "string",
+      "description": "bcrypt 密码哈希",
+      "label": "密码哈希"
+    },
+    "role": {
+      "bsonType": "string",
+      "description": "角色",
+      "label": "角色",
+      "defaultValue": "admin",
+      "enum": [
+        {"value": "admin", "text": "普通管理员"},
+        {"value": "super_admin", "text": "超级管理员"}
+      ]
+    },
+    "nickname": {
+      "bsonType": "string",
+      "description": "昵称",
+      "label": "昵称"
+    },
+    "token": {
+      "bsonType": "string",
+      "description": "登录token",
+      "label": "Token"
+    },
+    "status": {
+      "bsonType": "int",
+      "description": "状态：1=启用，0=禁用",
+      "label": "状态",
+      "defaultValue": 1
+    },
+    "lastLoginAt": {
+      "bsonType": "timestamp",
+      "description": "最后登录时间",
+      "label": "最后登录"
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "label": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "updatedAt": {
+      "bsonType": "timestamp",
+      "label": "更新时间"
+    }
+  }
+}

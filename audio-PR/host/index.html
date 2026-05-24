@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Plugin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login Overlay -->
+    <div id="login-overlay">
+        <div id="login-card">
+            <div id="login-logo">Audio Plugin</div>
+            <div id="login-title">登录以访问音频素材</div>
+            <div class="login-form">
+                <input type="text" id="login-mobile" placeholder="手机号" maxlength="11">
+                <div class="sms-row">
+                    <input type="text" id="login-code" placeholder="验证码" maxlength="6">
+                    <button id="btn-send-sms" onclick="doSendSMS()">获取验证码</button>
+                </div>
+                <button id="btn-login" onclick="doLogin()">登录</button>
+            </div>
+            <div class="login-footer">
+                登录即表示同意服务条款
+            </div>
+        </div>
+    </div>
+
+    <!-- Main UI -->
+    <div id="main-ui" style="display: none;">
+
+    <!-- Header -->
+    <div id="header">
+        <span id="header-title">Audio Plugin</span>
+        <span id="connection-status" class="status-dot disconnected" title="ExtendScript status"></span>
+    </div>
+
+    <!-- Search -->
+    <div id="search-bar">
+        <input type="text" id="search-input" placeholder="搜索音频文件..." disabled>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-container">
+        <!-- Left Panel: Category Tree -->
+        <div id="left-panel">
+            <div id="category-tree">
+                <!-- Populated by panel.js -->
+            </div>
+        </div>
+
+        <!-- Divider -->
+        <div id="divider"></div>
+
+        <!-- Right Panel: Audio File List -->
+        <div id="right-panel">
+            <div id="list-header">
+                <span id="list-title">请选择分类</span>
+                <span id="list-count"></span>
+            </div>
+            <div id="audio-list">
+                <div class="empty-state">选择左侧分类查看音频文件</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="status-bar">
+        <span id="status-text">正在初始化...</span>
+    </div>
+
+    <script src="CSInterface.js"></script>
+    <script src="panel.js"></script>
+
+    </div><!-- end main-ui -->
+</body>
+</html>

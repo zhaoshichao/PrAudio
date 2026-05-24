@@ -1,0 +1,48 @@
+{
+  "bsonType": "object",
+  "required": ["name"],
+  "permission": {
+    "read": true,
+    "create": "'admin_token' in auth.getToken()",
+    "update": "'admin_token' in auth.getToken()",
+    "delete": "'admin_token' in auth.getToken()"
+  },
+  "properties": {
+    "_id": {
+      "bsonType": "string"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "标签名称",
+      "label": "名称"
+    },
+    "color": {
+      "bsonType": "string",
+      "description": "标签颜色（hex）",
+      "label": "颜色",
+      "defaultValue": "#6c5ce7"
+    },
+    "sort": {
+      "bsonType": "int",
+      "description": "排序值",
+      "label": "排序",
+      "defaultValue": 0
+    },
+    "status": {
+      "bsonType": "int",
+      "label": "状态",
+      "defaultValue": 1
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "label": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "updatedAt": {
+      "bsonType": "timestamp",
+      "label": "更新时间"
+    }
+  }
+}

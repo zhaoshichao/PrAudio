@@ -1,0 +1,38 @@
+{
+  "bsonType": "object",
+  "required": ["user_id", "audio_id"],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "auth.uid != null",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "bsonType": "string"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "用户ID",
+      "label": "用户"
+    },
+    "audio_id": {
+      "bsonType": "string",
+      "description": "音频ID",
+      "label": "音频",
+      "foreignKey": "audio_files._id"
+    },
+    "version_id": {
+      "bsonType": "string",
+      "description": "收藏时选择的版本ID",
+      "label": "版本"
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "label": "收藏时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  }
+}

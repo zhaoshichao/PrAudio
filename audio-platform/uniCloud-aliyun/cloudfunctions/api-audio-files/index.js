@@ -4,6 +4,27 @@ const { db, cmd } = require('../common/db')
 const { success, parsePagination } = require('../common/utils')
 
 exports.main = async (event, context) => {
+    // Hot audio: return top audios ordered by sort
+    if (event.action === 'hot') {
+        const hotRes = await db.collection('audio_files').where({ status: 1 })
+            .orderBy('sort', 'asc').limit(event.limit || 6).get()
+        const hotAudioIds = hotRes.data.map(a => a._id)
+        const hotVersionsMap = {}
+        if (hotAudioIds.length > 0) {
+            const allVer = await db.collection('audio_versions')
+                .where({ audioId: cmd.in(hotAudioIds) }).get()
+            allVer.data.forEach(v => {
+                if (!hotVersionsMap[v.audioId]) hotVersionsMap[v.audioId] = []
+                hotVersionsMap[v.audioId].push(v)
+            })
+        }
+        const hotAudios = hotRes.data.map(audio => ({
+            ...audio,
+            versions: hotVersionsMap[audio._id] || []
+        }))
+        return success(hotAudios)
+    }
+
     const { page, limit, skip } = parsePagination(event)
     let where = { status: 1 }
 

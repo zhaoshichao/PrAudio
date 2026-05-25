@@ -46,22 +46,22 @@
             <view
               class="tree-item"
               v-for="cat in categoryTree"
-              :key="cat.id"
+              :key="cat._id"
             >
               <view class="tree-parent" @tap="toggleCategory(cat)">
-                <text class="tree-arrow">{{ expandedIds.has(cat.id) ? '▼' : '▶' }}</text>
+                <text class="tree-arrow">{{ expandedIds.has(cat._id) ? '▼' : '▶' }}</text>
                 <text class="tree-name">{{ cat.name }}</text>
-                <text class="tree-count">{{ cat.count }}</text>
+                <text class="tree-count">{{ cat.count || 0 }}</text>
               </view>
-              <view class="tree-children" v-if="expandedIds.has(cat.id) && cat.children">
+              <view class="tree-children" v-if="expandedIds.has(cat._id) && cat.children">
                 <view
                   class="tree-child"
                   v-for="child in cat.children"
-                  :key="child.id"
+                  :key="child._id"
                   @tap="selectCategory(child)"
                 >
-                  <text class="tree-name" :class="{ active: activeCategoryId === child.id }">{{ child.name }}</text>
-                  <text class="tree-count">{{ child.count }}</text>
+                  <text class="tree-name" :class="{ active: activeCategoryId === child._id }">{{ child.name }}</text>
+                  <text class="tree-count">{{ child.count || 0 }}</text>
                 </view>
               </view>
             </view>
@@ -154,40 +154,27 @@ const versionOptions = ref([
   { label: '90秒', value: '90s' },
 ])
 
-const categoryTree = ref([
-  {
-    id: 1, name: '影视配乐', count: 86,
-    children: [
-      { id: 11, name: '预告片', count: 32 },
-      { id: 12, name: '纪录片', count: 28 },
-      { id: 13, name: '广告片', count: 26 },
-    ],
-  },
-  {
-    id: 2, name: '流行音乐', count: 124,
-    children: [
-      { id: 21, name: '电子', count: 48 },
-      { id: 22, name: '爵士', count: 36 },
-      { id: 23, name: '摇滚', count: 40 },
-    ],
-  },
-  {
-    id: 3, name: '氛围音效', count: 64,
-    children: [],
-  },
-])
+const categoryTree = ref([])
 
 const isMember = ref(false)
 
 // expandedIds: Set of currently-expanded category node IDs
 const expandedIds = ref(new Set())
-function collectIds(nodes) {
-  nodes.forEach(n => {
-    expandedIds.value.add(n.id)
-    if (n.children && n.children.length) collectIds(n.children)
-  })
+
+function loadCategories() {
+  publicApi.getCategoryTree().then(res => {
+    categoryTree.value = res.data || []
+    const nextIds = new Set()
+    function collect(nodes) {
+      nodes.forEach(n => {
+        nextIds.add(n._id)
+        if (n.children && n.children.length) collect(n.children)
+      })
+    }
+    collect(categoryTree.value)
+    expandedIds.value = nextIds
+  }).catch(() => {})
 }
-collectIds(categoryTree.value)
 
 // playingIds: Set of currently-playing audio IDs
 const playingIds = ref(new Set())
@@ -196,6 +183,7 @@ const favoritedIds = ref(new Set())
 
 onMounted(() => {
   checkMember()
+  loadCategories()
   loadList()
 })
 
@@ -206,17 +194,13 @@ function checkMember() {
 
 function toggleCategory(cat) {
   const next = new Set(expandedIds.value)
-  if (next.has(cat.id)) next.delete(cat.id)
-  else next.add(cat.id)
+  if (next.has(cat._id)) next.delete(cat._id)
+  else next.add(cat._id)
   expandedIds.value = next
 }
 
-function toggleSubCategory(item) {
-  selectCategory(item)
-}
-
-function selectCategory(gchild) {
-  activeCategoryId.value = gchild.id
+function selectCategory(cat) {
+  activeCategoryId.value = cat._id
   showCategory.value = false
   page.value = 1
   loadList()
@@ -256,6 +240,7 @@ function loadList() {
   publicApi.getAudioList(params).then(res => {
     const list = (res.data?.list || []).map(item => ({
       ...item,
+      id: item._id,
       selectedVersion: item.versions?.[0]?.name || '30秒',
     }))
     // Sync favorited set from API data

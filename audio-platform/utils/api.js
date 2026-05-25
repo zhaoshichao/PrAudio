@@ -77,6 +77,8 @@ export const publicApi = {
     getCategories: (keyword) => callFunction('api-categories', { keyword }),
     getCategoryTree: () => callFunction('api-categories', { action: 'tree' }),
     getAudioFiles: (params) => callFunction('api-audio-files', params),
+    getAudioList: (params) => callFunction('api-audio-files', params),
+    getHotAudio: (limit) => callFunction('api-audio-files', { action: 'hot', limit: limit || 6 }),
     getTags: () => callFunction('api-tags'),
     getVersions: () => callFunction('api-versions'),
 }

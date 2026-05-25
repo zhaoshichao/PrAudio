@@ -24,9 +24,9 @@
         <view
           class="category-card"
           v-for="cat in categories"
-          :key="cat.id"
+          :key="cat._id"
           :style="{ background: cat.bg }"
-          @tap="goToCategory(cat.id)"
+          @tap="goToCategory(cat._id)"
         >
           <text class="category-icon">{{ cat.icon }}</text>
           <text class="category-name">{{ cat.name }}</text>
@@ -126,12 +126,18 @@ const currentTab = ref(0)
 const playingIds = ref(new Set())
 const favoritedIds = ref(new Set())
 
-const categories = ref([
-  { id: 1, name: '怀旧音乐', icon: '📻', count: 128, bg: 'linear-gradient(135deg, #6c5ce7, #a29bfe)' },
-  { id: 2, name: '现代流行', icon: '🎸', count: 256, bg: 'linear-gradient(135deg, #00b894, #55efc4)' },
-  { id: 3, name: '史诗管弦', icon: '🎻', count: 96, bg: 'linear-gradient(135deg, #e17055, #fab1a0)' },
-  { id: 4, name: '电子氛围', icon: '🎹', count: 180, bg: 'linear-gradient(135deg, #0984e3, #74b9ff)' },
-])
+const categories = ref([])
+const categoryIconPool = ['📻', '🎸', '🎻', '🎹', '🎺', '🥁', '🎷', '🪕']
+const categoryBgPool = [
+  'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+  'linear-gradient(135deg, #00b894, #55efc4)',
+  'linear-gradient(135deg, #e17055, #fab1a0)',
+  'linear-gradient(135deg, #0984e3, #74b9ff)',
+  'linear-gradient(135deg, #d63031, #ff7675)',
+  'linear-gradient(135deg, #fdcb6e, #ffeaa7)',
+  'linear-gradient(135deg, #00cec9, #81ecec)',
+  'linear-gradient(135deg, #a29bfe, #6c5ce7)',
+]
 
 const hotAudioList = ref([])
 
@@ -160,13 +166,27 @@ const memberPlans = ref([
 ])
 
 onMounted(() => {
+  loadCategories()
   loadHotAudio()
 })
+
+function loadCategories() {
+  publicApi.getCategoryTree().then(res => {
+    // Only take top-level categories (level 1) for the homepage grid
+    const list = res.data || []
+    categories.value = list.map((cat, i) => ({
+      ...cat,
+      icon: categoryIconPool[i % categoryIconPool.length],
+      bg: categoryBgPool[i % categoryBgPool.length],
+    }))
+  }).catch(() => {})
+}
 
 function loadHotAudio() {
   publicApi.getHotAudio().then(res => {
     hotAudioList.value = (res.data || []).map(item => ({
       ...item,
+      id: item._id,
       selectedVersion: item.versions?.[0]?.name || '30秒',
     }))
     const favs = new Set()

@@ -7,31 +7,15 @@
         <input
           class="search-input"
           v-model="keyword"
-          placeholder="搜索音频名称、标签..."
+          placeholder="搜索音频名称..."
           placeholder-style="color: #666"
           @confirm="onSearch"
         />
       </view>
-      <!-- Category Toggle Button for Mobile -->
       <view class="category-toggle" @tap="showCategory = !showCategory">
         <text>☰</text>
       </view>
     </view>
-
-    <!-- Tag Filter Chips -->
-    <scroll-view scroll-x class="tag-scroll" :show-scrollbar="false">
-      <view class="tag-chips">
-        <view
-          class="tag-chip"
-          :class="{ active: activeTag === tag }"
-          v-for="tag in filterTags"
-          :key="tag"
-          @tap="onTagFilter(tag)"
-        >
-          <text>{{ tag }}</text>
-        </view>
-      </view>
-    </scroll-view>
 
     <view class="main-content">
       <!-- Left Category Tree -->
@@ -43,17 +27,13 @@
             <text class="tree-close" @tap="showCategory = false">✕</text>
           </view>
           <scroll-view scroll-y class="tree-scroll">
-            <view
-              class="tree-item"
-              v-for="cat in categoryTree"
-              :key="cat._id"
-            >
+            <view class="tree-item" v-for="cat in categoryTree" :key="cat._id">
               <view class="tree-parent" @tap="toggleCategory(cat)">
                 <text class="tree-arrow">{{ expandedIds.has(cat._id) ? '▼' : '▶' }}</text>
                 <text class="tree-name">{{ cat.name }}</text>
                 <text class="tree-count">{{ cat.count || 0 }}</text>
               </view>
-              <view class="tree-children" v-if="expandedIds.has(cat._id) && cat.children">
+              <view class="tree-children" v-if="expandedIds.has(cat._id) && cat.children && cat.children.length">
                 <view
                   class="tree-child"
                   v-for="child in cat.children"
@@ -69,16 +49,12 @@
         </view>
       </view>
 
-      <!-- Audio Grid -->
-      <view class="audio-grid-panel">
-        <!-- Version Filter -->
-        <view class="version-bar">
-          <picker :range="versionOptions" range-key="label" @change="onVersionFilter">
-            <view class="version-picker">
-              <text>{{ versionOptions[selectedVersionIndex]?.label || '选择版本' }}</text>
-              <text class="picker-arrow">▼</text>
-            </view>
-          </picker>
+      <!-- Audio List -->
+      <view class="audio-list-panel">
+        <!-- Current Category Indicator -->
+        <view class="current-category" v-if="currentCategoryName">
+          <text class="category-label">当前分类：{{ currentCategoryName }}</text>
+          <text class="category-clear" v-if="activeCategoryId" @tap="clearCategory">清除</text>
         </view>
 
         <scroll-view
@@ -89,39 +65,48 @@
           :refresher-triggered="refreshing"
           @refresherrefresh="onRefresh"
         >
-          <view class="audio-grid">
-            <view class="audio-card" v-for="item in audioList" :key="item.id" @tap="goToDetail(item.id)">
-              <image class="card-cover" :src="item.cover" mode="aspectFill" />
-              <view class="card-body">
-                <text class="card-name" lines="1">{{ item.name }}</text>
-                <text class="card-desc" lines="2">{{ item.description }}</text>
-                <view class="card-tags">
-                  <text class="card-tag" v-for="tag in item.tags" :key="tag" :style="{ background: getTagColor(tag) }">{{ tag }}</text>
+          <view class="audio-list">
+            <view class="audio-item" v-for="item in audioList" :key="item.id">
+              <view class="audio-header">
+                <view class="audio-info">
+                  <text class="audio-name">{{ item.name }}</text>
+                  <text class="audio-desc" v-if="item.description">{{ item.description }}</text>
                 </view>
-                <view class="card-footer">
-                  <view class="version-select" @tap.stop>
-                    <picker :range="item.versions" range-key="name" @change="e => onItemVersionChange(item, e)">
-                      <text class="version-label">{{ item.selectedVersion || item.versions[0]?.name }}</text>
-                      <text class="picker-arrow">▼</text>
-                    </picker>
+                <view class="audio-meta">
+                  <text class="audio-duration" v-if="item.versions && item.versions.length">{{ item.versions.length }}个版本</text>
+                </view>
+              </view>
+              <!-- Version file list -->
+              <view class="version-list" v-if="item.versions && item.versions.length">
+                <view
+                  class="version-item"
+                  v-for="ver in item.versions"
+                  :key="ver._id"
+                  @tap="playVersion(item, ver)"
+                >
+                  <view class="version-left">
+                    <text class="version-play-icon">{{ playingVerKey(item, ver) ? '⏸' : '▶️' }}</text>
+                    <view class="version-detail">
+                      <text class="version-name">{{ ver.versionName || ver.fileName || '音频文件' }}</text>
+                      <text class="version-file" v-if="ver.fileName">{{ ver.fileName }}</text>
+                    </view>
                   </view>
-                  <view class="card-actions">
-                    <view class="action-icon" @tap.stop="togglePlay(item)">
-                      <text>{{ playingIds.has(item.id) ? '⏸' : '▶️' }}</text>
-                    </view>
-                    <view class="action-icon" @tap.stop="handleFavorite(item)">
-                      <text :style="{ color: favoritedIds.has(item.id) ? '#e74c3c' : '#888' }">♥</text>
-                    </view>
+                  <view class="version-right">
+                    <text class="version-size" v-if="ver.fileSize">{{ formatSize(ver.fileSize) }}</text>
+                    <text class="version-dur" v-if="ver.duration">{{ formatDuration(ver.duration) }}</text>
                   </view>
                 </view>
               </view>
+              <view class="no-version" v-else>
+                <text>暂无版本文件</text>
+              </view>
             </view>
           </view>
-          <view class="load-more" v-if="hasMore">
+          <view class="load-more" v-if="hasMore && audioList.length > 0">
             <text class="load-text">加载更多...</text>
           </view>
           <view class="empty-state" v-if="!loading && audioList.length === 0">
-            <text class="empty-text">暂无音频素材</text>
+            <text class="empty-text">该分类下暂无音频</text>
           </view>
         </scroll-view>
       </view>
@@ -130,14 +115,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { publicApi, userApi } from '@/utils/api.js'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { publicApi } from '@/utils/api.js'
 
 const keyword = ref('')
 const showCategory = ref(false)
-const activeTag = ref('全部')
 const activeCategoryId = ref(null)
-const selectedVersionIndex = ref(0)
+const currentCategoryName = ref('')
 const audioList = ref([])
 const loading = ref(false)
 const refreshing = ref(false)
@@ -145,21 +129,31 @@ const hasMore = ref(true)
 const page = ref(1)
 const pageSize = 20
 
-const filterTags = ref(['全部', '影视配乐', '广告音乐', '短视频', '游戏音效', '治愈系', '史诗级'])
-
-const versionOptions = ref([
-  { label: '全部版本', value: '' },
-  { label: '30秒', value: '30s' },
-  { label: '60秒', value: '60s' },
-  { label: '90秒', value: '90s' },
-])
-
 const categoryTree = ref([])
-
-const isMember = ref(false)
-
-// expandedIds: Set of currently-expanded category node IDs
 const expandedIds = ref(new Set())
+
+// Audio player
+let audioCtx = null
+const playingKey = ref('') // "audioId_versionId"
+
+onMounted(() => {
+  loadCategories()
+  // Read URL params on page load
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1]
+  const options = currentPage?.$page?.options || currentPage?.options || {}
+  if (options.categoryId) {
+    activeCategoryId.value = options.categoryId
+  }
+  loadList()
+})
+
+onUnmounted(() => {
+  if (audioCtx) {
+    audioCtx.destroy()
+    audioCtx = null
+  }
+})
 
 function loadCategories() {
   publicApi.getCategoryTree().then(res => {
@@ -173,23 +167,27 @@ function loadCategories() {
     }
     collect(categoryTree.value)
     expandedIds.value = nextIds
+    // Set current category name from URL param
+    updateCurrentCategoryName()
   }).catch(() => {})
 }
 
-// playingIds: Set of currently-playing audio IDs
-const playingIds = ref(new Set())
-// favoritedIds: Set of favorited audio IDs
-const favoritedIds = ref(new Set())
-
-onMounted(() => {
-  checkMember()
-  loadCategories()
-  loadList()
-})
-
-function checkMember() {
-  const userInfo = uni.getStorageSync('userInfo')
-  isMember.value = userInfo?.member?.isMember || false
+function updateCurrentCategoryName() {
+  if (!activeCategoryId.value) return
+  for (const cat of categoryTree.value) {
+    if (cat._id === activeCategoryId.value) {
+      currentCategoryName.value = cat.name
+      return
+    }
+    if (cat.children) {
+      for (const child of cat.children) {
+        if (child._id === activeCategoryId.value) {
+          currentCategoryName.value = child.name
+          return
+        }
+      }
+    }
+  }
 }
 
 function toggleCategory(cat) {
@@ -201,7 +199,15 @@ function toggleCategory(cat) {
 
 function selectCategory(cat) {
   activeCategoryId.value = cat._id
+  currentCategoryName.value = cat.name
   showCategory.value = false
+  page.value = 1
+  loadList()
+}
+
+function clearCategory() {
+  activeCategoryId.value = null
+  currentCategoryName.value = ''
   page.value = 1
   loadList()
 }
@@ -211,46 +217,19 @@ function onSearch() {
   loadList()
 }
 
-function onTagFilter(tag) {
-  activeTag.value = tag === activeTag.value ? '全部' : tag
-  page.value = 1
-  loadList()
-}
-
-function onVersionFilter(e) {
-  selectedVersionIndex.value = e.detail.value
-  page.value = 1
-  loadList()
-}
-
-function onItemVersionChange(item, e) {
-  item.selectedVersion = item.versions[e.detail.value]?.name
-}
-
 function loadList() {
   loading.value = true
   const params = {
     page: page.value,
     pageSize,
     keyword: keyword.value,
-    tag: activeTag.value === '全部' ? '' : activeTag.value,
-    version: versionOptions.value[selectedVersionIndex.value]?.value,
     categoryId: activeCategoryId.value,
   }
   publicApi.getAudioList(params).then(res => {
     const list = (res.data?.list || []).map(item => ({
       ...item,
       id: item._id,
-      selectedVersion: item.versions?.[0]?.name || '30秒',
     }))
-    // Sync favorited set from API data
-    const favSet = new Set()
-    list.forEach(item => {
-      if (item.favorited) favSet.add(item.id)
-    })
-    favoritedIds.value = favSet
-    // Reset playing state on fresh load
-    if (page.value === 1) playingIds.value = new Set()
     if (page.value === 1) {
       audioList.value = list
     } else {
@@ -277,49 +256,57 @@ function onRefresh() {
   loadList()
 }
 
-function handleFavorite(item) {
-  if (!isMember.value) {
-    uni.showToast({ title: '请先开通会员', icon: 'none' })
+function playingVerKey(item, ver) {
+  return item.id + '_' + ver._id
+}
+
+function playVersion(item, ver) {
+  const key = playingVerKey(item, ver)
+  if (playingKey.value === key) {
+    // Stop current
+    if (audioCtx) audioCtx.stop()
+    playingKey.value = ''
     return
   }
-  userApi.toggleFavorite({ audioId: item.id }).then(() => {
-    const next = new Set(favoritedIds.value)
-    if (next.has(item.id)) next.delete(item.id)
-    else next.add(item.id)
-    favoritedIds.value = next
-    uni.showToast({ title: next.has(item.id) ? '已收藏' : '已取消收藏', icon: 'none' })
-  }).catch(err => {
-    uni.showToast({ title: err.message || '操作失败', icon: 'none' })
+  // Play new
+  if (!ver.fileUrl) {
+    uni.showToast({ title: '该版本无音频文件', icon: 'none' })
+    return
+  }
+  if (audioCtx) {
+    audioCtx.destroy()
+  }
+  audioCtx = uni.createInnerAudioContext()
+  audioCtx.src = ver.fileUrl
+  audioCtx.autoplay = true
+  audioCtx.onPlay(() => {
+    playingKey.value = key
+  })
+  audioCtx.onStop(() => {
+    playingKey.value = ''
+  })
+  audioCtx.onEnded(() => {
+    playingKey.value = ''
+  })
+  audioCtx.onError((err) => {
+    console.error('audio play error:', err)
+    playingKey.value = ''
+    uni.showToast({ title: '播放失败' + (err.errMsg ? ': ' + err.errMsg : ''), icon: 'none' })
   })
 }
 
-function togglePlay(item) {
-  if (!isMember.value) {
-    uni.showToast({ title: '请先开通会员', icon: 'none' })
-    return
-  }
-  const next = new Set(playingIds.value)
-  if (next.has(item.id)) next.delete(item.id)
-  else next.add(item.id)
-  playingIds.value = next
+function formatSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
 }
 
-function goToDetail(id) {
-  uni.navigateTo({ url: `/pages/audio/detail?id=${id}` })
-}
-
-function getTagColor(tag) {
-  const colors = {
-    '影视': 'rgba(108, 92, 231, 0.2)',
-    '广告': 'rgba(0, 184, 148, 0.2)',
-    '游戏': 'rgba(225, 112, 85, 0.2)',
-    '短视频': 'rgba(9, 132, 227, 0.2)',
-    '治愈': 'rgba(253, 203, 110, 0.2)',
-  }
-  for (const key in colors) {
-    if (tag.includes(key)) return colors[key]
-  }
-  return 'rgba(108, 92, 231, 0.15)'
+function formatDuration(seconds) {
+  if (!seconds) return ''
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return m + ':' + String(s).padStart(2, '0')
 }
 </script>
 
@@ -370,32 +357,6 @@ function getTagColor(tag) {
   justify-content: center;
   font-size: 32rpx;
   color: #fff;
-}
-
-.tag-scroll {
-  white-space: nowrap;
-  padding: 0 24rpx;
-}
-
-.tag-chips {
-  display: inline-flex;
-  gap: 14rpx;
-  padding-bottom: 8rpx;
-}
-
-.tag-chip {
-  padding: 10rpx 24rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 24rpx;
-  font-size: 24rpx;
-  color: #aaa;
-  flex-shrink: 0;
-}
-
-.tag-chip.active {
-  background: rgba(108, 92, 231, 0.3);
-  color: #6c5ce7;
-  font-weight: bold;
 }
 
 .main-content {
@@ -494,13 +455,6 @@ function getTagColor(tag) {
   gap: 10rpx;
 }
 
-.tree-grandchild {
-  display: flex;
-  align-items: center;
-  padding: 12rpx 24rpx 12rpx 80rpx;
-  gap: 10rpx;
-}
-
 .tree-arrow {
   font-size: 20rpx;
   color: #888;
@@ -524,131 +478,172 @@ function getTagColor(tag) {
   color: #666;
 }
 
-.tree-leaf {
-  font-size: 16rpx;
-  color: #666;
-}
-
-/* Audio Grid */
-.audio-grid-panel {
+/* Audio List Panel */
+.audio-list-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-.version-bar {
-  padding: 12rpx 24rpx;
-}
-
-.version-picker {
-  display: inline-flex;
+.current-category {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8rpx;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 10rpx 20rpx;
-  border-radius: 20rpx;
-  font-size: 24rpx;
-  color: #aaa;
+  padding: 16rpx 24rpx;
+  background: rgba(108, 92, 231, 0.1);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
-.picker-arrow {
-  font-size: 18rpx;
+.category-label {
+  font-size: 26rpx;
+  color: #6c5ce7;
+  font-weight: bold;
+}
+
+.category-clear {
+  font-size: 24rpx;
+  color: #888;
+  padding: 4rpx 16rpx;
 }
 
 .audio-scroll {
   flex: 1;
 }
 
-.audio-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20rpx;
-  padding: 0 24rpx 20rpx;
+.audio-list {
+  padding: 16rpx 24rpx;
 }
 
-.audio-card {
-  background: rgba(255, 255, 255, 0.06);
+.audio-item {
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 12rpx;
+  margin-bottom: 20rpx;
   overflow: hidden;
 }
 
-.card-cover {
-  width: 100%;
-  height: 220rpx;
-  background: rgba(108, 92, 231, 0.3);
+.audio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20rpx 24rpx 12rpx;
 }
 
-.card-body {
-  padding: 16rpx;
+.audio-info {
+  flex: 1;
 }
 
-.card-name {
-  font-size: 26rpx;
+.audio-name {
+  font-size: 30rpx;
   font-weight: bold;
   color: #fff;
   display: block;
   margin-bottom: 6rpx;
 }
 
-.card-desc {
-  font-size: 22rpx;
+.audio-desc {
+  font-size: 24rpx;
   color: #888;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  margin-bottom: 10rpx;
+  display: block;
   line-height: 1.5;
 }
 
-.card-tags {
-  display: flex;
-  gap: 8rpx;
-  flex-wrap: wrap;
-  margin-bottom: 12rpx;
+.audio-meta {
+  flex-shrink: 0;
+  margin-left: 16rpx;
 }
 
-.card-tag {
-  font-size: 18rpx;
-  color: #aaa;
-  padding: 4rpx 10rpx;
-  border-radius: 6rpx;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.version-select {
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 6rpx 12rpx;
+.audio-duration {
+  font-size: 22rpx;
+  color: #666;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4rpx 12rpx;
   border-radius: 8rpx;
 }
 
-.version-label {
-  font-size: 20rpx;
-  color: #aaa;
+/* Version List */
+.version-list {
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
-.card-actions {
+.version-item {
   display: flex;
-  gap: 12rpx;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 24rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s;
 }
 
-.action-icon {
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+.version-item:active {
+  background: rgba(108, 92, 231, 0.15);
+}
+
+.version-item:last-child {
+  border-bottom: none;
+}
+
+.version-left {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 14rpx;
+  flex: 1;
+  overflow: hidden;
+}
+
+.version-play-icon {
+  font-size: 32rpx;
+  width: 44rpx;
+  text-align: center;
+}
+
+.version-detail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.version-name {
+  font-size: 26rpx;
+  color: #ddd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-file {
+  font-size: 20rpx;
+  color: #666;
+  margin-top: 2rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-right {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+}
+
+.version-size {
+  font-size: 22rpx;
+  color: #888;
+}
+
+.version-dur {
+  font-size: 22rpx;
+  color: #6c5ce7;
+  font-weight: bold;
+}
+
+.no-version {
+  padding: 24rpx;
+  text-align: center;
   font-size: 24rpx;
+  color: #666;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
 .load-more {

@@ -13,7 +13,22 @@
       "Bash(git -C:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npx --help)",
+      "Bash(npm list:*)",
+      "Bash(ls /Users/zsc/Documents/Code_s/ExtendScript/Audio/audio-platform/vite.config.*)",
+      "Bash(ls /Users/zsc/Documents/Code_s/ExtendScript/Audio/audio-platform/uniCloud-aliyun/*.json)",
+      "Bash(npm install:*)",
+      "Bash(npx vite:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm view:*)",
+      "Bash(ln -s .. audio-platform/src)",
+      "Bash(ln:*)",
+      "Bash(rm src:*)",
+      "Bash(mkdir src:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm --version)",
+      "WebFetch(domain:hx.dcloud.net.cn)"
     ]
   }
 }

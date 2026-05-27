@@ -28,7 +28,10 @@
       "Bash(mkdir src:*)",
       "Bash(mkdir:*)",
       "Bash(npm --version)",
-      "WebFetch(domain:hx.dcloud.net.cn)"
+      "WebFetch(domain:hx.dcloud.net.cn)",
+      "Bash(bash --login -c \"echo \\\\$PATH\" 2>&1)",
+      "Bash(bash --login -c \"nvm ls\" 2>&1)",
+      "Bash(bash --login -c \"node -v\" 2>&1)"
     ]
   }
 }
